@@ -1,57 +1,65 @@
 # soucemap-test-ember-3-9
 
-This README outlines the details of collaborating on this Ember application.
-A short introduction of this app could easily go here.
+Adding the [ember-tooltips] addon to your Ember project has the effect of "breaking" the sourcemaps for the vendor bundle.
 
-## Prerequisites
+By "break" I mean that the `sourcesContent` element of the souremaps will be omitted. This can cause tooling, such as [New Relic Browser] and [Sentry], to fail to render sourcemaps properly in Error reports.
 
-You will need the following things properly installed on your computer.
+The problem appears to be caused by the `app.import(` calls for `popper.js` and `tooltip.js` in the `included(` Ember addon hook of the [ember-tooltips] addon:
 
-* [Git](https://git-scm.com/)
-* [Node.js](https://nodejs.org/) (with npm)
-* [Ember CLI](https://ember-cli.com/)
-* [Google Chrome](https://google.com/chrome/)
+```
+  included: function(app) {
+    this._super.included.apply(this, arguments);
 
-## Installation
+    app.import("node_modules/popper.js/dist/umd/popper.js", {
+      using: [
+        {
+          transformation: "amd",
+          as: "popper.js"
+        }
+      ]
+    });
 
-* `git clone <repository-url>` this repository
-* `cd soucemap-test-ember-3-9`
-* `npm install`
+    app.import("node_modules/tooltip.js/dist/umd/tooltip.js", {
+      using: [
+        {
+          transformation: "amd",
+          as: "tooltip.js"
+        }
+      ]
+    });
+  }
+```
 
-## Running / Development
+When building, notice that [broccoli-uglify-sourcemap] logs the following warning to the logs:
 
-* `ember serve`
-* Visit your app at [http://localhost:4200](http://localhost:4200).
-* Visit your tests at [http://localhost:4200/tests](http://localhost:4200/tests).
+```
+⠇ Building[WARN] (broccoli-uglify-sourcemap) "popper.js.map" referenced in "assets/vendor.js" could not be found
+```
 
-### Code Generators
+## Steps to Reproduce
 
-Make use of the many generators for code, try `ember help generate` for more details
+```
+$ ember build --environment production
+$ jq '.sourcesContent' dist/assets/vendor-*.map
+null
+```
 
-### Running Tests
+If that prints `null`, then the vendor sourcemap is missing the `sourcesContent` element.
 
-* `ember test`
-* `ember test --server`
+Now remove the `ember-tooltips` addon from `package.json` and build again:
+```
+$ yarn remove ember-tooltips && yarn
+$ ember build --environment production
+$ jq '.sourcesContent' dist/assets/vendor-*.map
+[
+  "window.EmberENV = {\"FEATURES\":{},\"EXTEND_PROTOTYPES\":{\"Date\":false}};\nvar runningTests = false;\n\n\n",
+...
+```
 
-### Linting
+Lots of sourcecode should be printed, showing that the addition of [ember-tooltips] is what breaks the sourcemaps.
 
-* `npm run lint:hbs`
-* `npm run lint:js`
-* `npm run lint:js -- --fix`
+[ember-tooltips]: https://github.com/sir-dunxalot/ember-tooltips
+[New Relic Browser]: https://docs.newrelic.com/docs/browser/new-relic-browser/browser-pro-features/upload-source-maps-un-minify-js-errors
+[Sentry]: https://docs.sentry.io/platforms/javascript/sourcemaps/
+[broccoli-uglify-sourcemap]: https://github.com/ember-cli/broccoli-uglify-sourcemap
 
-### Building
-
-* `ember build` (development)
-* `ember build --environment production` (production)
-
-### Deploying
-
-Specify what it takes to deploy your app.
-
-## Further Reading / Useful Links
-
-* [ember.js](https://emberjs.com/)
-* [ember-cli](https://ember-cli.com/)
-* Development Browser Extensions
-  * [ember inspector for chrome](https://chrome.google.com/webstore/detail/ember-inspector/bmdblncegkenkacieihfhpjfppoconhi)
-  * [ember inspector for firefox](https://addons.mozilla.org/en-US/firefox/addon/ember-inspector/)
